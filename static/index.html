@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Price Finder</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Travel Price Finder</h1>
+            <p class="subtitle">400+ airlines · 200+ connectors · Direct raw prices · No markup</p>
+        </header>
+
+        <form id="search-form">
+            <div class="form-row">
+                <div class="field">
+                    <label for="origin">Origin</label>
+                    <input id="origin" placeholder="LON, JFK, BCN..." required>
+                </div>
+                <div class="field">
+                    <label for="destination">Destination</label>
+                    <input id="destination" placeholder="CDG, MIA, NRT..." required>
+                </div>
+                <div class="field">
+                    <label for="date">Departure Date</label>
+                    <input id="date" type="date" required>
+                </div>
+                <div class="field">
+                    <label for="return_date">Return (optional)</label>
+                    <input id="return_date" type="date">
+                </div>
+            </div>
+            <div class="form-row form-row-small">
+                <div class="field">
+                    <label for="adults">Adults</label>
+                    <input id="adults" type="number" min="1" max="9" value="1">
+                </div>
+                <div class="field">
+                    <label for="cabin_class">Cabin</label>
+                    <select id="cabin_class">
+                        <option value="">Any</option>
+                        <option value="M">Economy</option>
+                        <option value="W">Premium</option>
+                        <option value="C">Business</option>
+                        <option value="F">First</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="max_stops">Max Stops</label>
+                    <select id="max_stops">
+                        <option value="0">Direct only</option>
+                        <option value="1">1 stop</option>
+                        <option value="2" selected>2 stops</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="mode">Speed</label>
+                    <select id="mode">
+                        <option value="fast">Fast (~25s)</option>
+                        <option value="full">Full (~6min)</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <button type="submit" id="search-btn">Search</button>
+                </div>
+            </div>
+        </form>
+
+        <div id="status" class="status"></div>
+        <div id="results" class="results"></div>
+    </div>
+    <script src="/app.js"></script>
+</body>
+</html>
