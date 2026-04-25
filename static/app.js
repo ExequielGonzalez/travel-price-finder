@@ -1,21 +1,28 @@
 const form = document.getElementById('search-form');
 const statusDiv = document.getElementById('status');
+const toolbar = document.getElementById('toolbar');
 const resultsDiv = document.getElementById('results');
 const button = document.getElementById('search-btn');
+
+var allOffers = [];
+var currentSort = 'price';
+var filterDirect = false;
+var filterBaggage = false;
+var filterRefundable = false;
 
 function getValue(id) {
     return document.getElementById(id).value;
 }
 
 function fmtDuration(seconds) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
     return h + 'h ' + m + 'm';
 }
 
 function fmtDate(iso) {
     if (!iso) return '';
-    const d = new Date(iso);
+    var d = new Date(iso);
     return d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
@@ -24,69 +31,15 @@ function fmtTime(iso) {
     return iso.slice(11, 16);
 }
 
-function getRoute(segments) {
-    if (!segments || !segments.length) return '';
-    const codes = segments.map(function(s) { return s.origin + ' → ' + s.destination; });
-    return codes.join(' / ');
-}
-
-function getOrigin(segments) {
-    return segments && segments.length ? segments[0].origin : '';
-}
-
-function getDestination(segments) {
-    return segments && segments.length ? segments[segments.length - 1].destination : '';
-}
-
-form.addEventListener('submit', async function(e) {
-    e.preventDefault();
-
-    const params = new URLSearchParams({
-        origin: getValue('origin').toUpperCase(),
-        destination: getValue('destination').toUpperCase(),
-        date: getValue('date'),
-        adults: getValue('adults'),
-        cabin_class: getValue('cabin_class'),
-        max_stops: getValue('max_stops'),
-        mode: getValue('mode'),
-    });
-
-    const returnDate = getValue('return_date');
-    if (returnDate) params.set('return_date', returnDate);
-
-    button.disabled = true;
-    button.innerHTML = '<span class="btn-spin"></span> Searching...';
-    statusDiv.innerHTML = '';
-    resultsDiv.innerHTML = '';
-
-    const startTime = Date.now();
-
-    try {
-        const res = await fetch('/api/search?' + params);
-        const data = await res.json();
-
-        if (!res.ok) {
-            throw new Error(data.detail || 'Search failed');
-        }
-
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-        statusDiv.innerHTML =
-            '<span class="found">' + data.total_results + ' offers · ' +
-            data.search_params.origin + ' → ' + data.search_params.destination +
-            ' · ' + data.search_params.date +
-            (data.search_params.return_date ? ' – ' + data.search_params.return_date : '') +
-            '</span>' +
-            '<span class="elapsed">' + elapsed + 's</span>';
-
-        renderResults(data.offers);
-    } catch (err) {
-        statusDiv.innerHTML = '<div class="error">' + err.message + '</div>';
-    } finally {
-        button.disabled = false;
-        button.innerHTML = 'Search';
+function getBaggageIncluded(offer) {
+    var bags = offer.bags_price || {};
+    var keys = Object.keys(bags);
+    for (var i = 0; i < keys.length; i++) {
+        var bag = bags[keys[i]];
+        if (bag && bag.included) return bag.included;
     }
-});
+    return null;
+}
 
 function getBaggageBadges(offer) {
     var badges = [];
@@ -104,9 +57,122 @@ function getBaggageBadges(offer) {
     return badges.join('');
 }
 
+function buildGoogleFlightsUrl(o) {
+    var out = o.outbound || {};
+    var segs = out.segments || [];
+    var origin = segs.length ? segs[0].origin : '';
+    var dest = segs.length ? segs[segs.length - 1].destination : '';
+    if (!origin || !dest) return '';
+
+    var depDate = segs.length ? segs[0].departure.slice(0, 10) : '';
+    if (!depDate) return '';
+
+    var url = 'https://www.google.com/travel/flights?q=Flights+to+' + dest +
+        '+from+' + origin +
+        '+on+' + depDate;
+
+    var inbound = o.inbound;
+    if (inbound) {
+        var inSegs = inbound.segments || [];
+        var retDate = inSegs.length ? inSegs[0].departure.slice(0, 10) : '';
+        if (retDate) url += '+return+' + retDate;
+    }
+
+    url += '&curr=' + (o.currency || 'EUR');
+    return url;
+}
+
+function hasValidBookingUrl(o) {
+    var url = o.booking_url;
+    if (!url) return false;
+    if (url.length < 40) return false;
+    if (!url.includes('?')) return false;
+    var parts = url.split('?');
+    if (parts.length < 2 || parts[1].length < 10) return false;
+    return true;
+}
+
+function getDurationFromSegments(segments) {
+    if (!segments || !segments.length) return 0;
+    var first = segments[0];
+    var last = segments[segments.length - 1];
+    if (!first.departure || !last.arrival) return 0;
+    var dep = new Date(first.departure);
+    var arr = new Date(last.arrival);
+    return (arr - dep) / 1000;
+}
+
+function getDuration(o) {
+    var out = o.outbound || {};
+    var d = out.total_duration_seconds || getDurationFromSegments(out.segments) || 0;
+    var inbound = o.inbound;
+    if (inbound) {
+        d += inbound.total_duration_seconds || getDurationFromSegments(inbound.segments) || 0;
+    }
+    return d;
+}
+
+function getStopovers(o) {
+    var out = o.outbound || {};
+    var s = out.stopovers != null ? out.stopovers : 0;
+    var inbound = o.inbound;
+    if (inbound) s += (inbound.stopovers != null ? inbound.stopovers : 0);
+    return s;
+}
+
+function getDepartureTime(o) {
+    var segs = (o.outbound || {}).segments;
+    if (segs && segs.length) return segs[0].departure || 'z';
+    return 'z';
+}
+
+function isDirect(o) {
+    var out = o.outbound || {};
+    if ((out.stopovers || 0) > 0) return false;
+    var inbound = o.inbound;
+    if (inbound && (inbound.stopovers || 0) > 0) return false;
+    return true;
+}
+
+function isRefundable(o) {
+    return (o.conditions || {}).refund_before_departure === 'allowed';
+}
+
+function filterAndSort() {
+    var filtered = allOffers.slice();
+
+    if (filterDirect) {
+        filtered = filtered.filter(isDirect);
+    }
+    if (filterBaggage) {
+        filtered = filtered.filter(function(o) { return getBaggageIncluded(o) !== null; });
+    }
+    if (filterRefundable) {
+        filtered = filtered.filter(isRefundable);
+    }
+
+    switch (currentSort) {
+        case 'price':
+            filtered.sort(function(a, b) { return (a.price || 0) - (b.price || 0); });
+            break;
+        case 'duration':
+            filtered.sort(function(a, b) { return getDuration(a) - getDuration(b); });
+            break;
+        case 'departure_early':
+            filtered.sort(function(a, b) { return getDepartureTime(a).localeCompare(getDepartureTime(b)); });
+            break;
+        case 'departure_late':
+            filtered.sort(function(a, b) { return getDepartureTime(b).localeCompare(getDepartureTime(a)); });
+            break;
+    }
+
+    document.getElementById('filter-count').textContent = filtered.length + ' of ' + allOffers.length;
+    renderResults(filtered);
+}
+
 function renderResults(offers) {
     if (!offers || !offers.length) {
-        resultsDiv.innerHTML = '<div class="empty">No flights found. Try different dates or destinations.</div>';
+        resultsDiv.innerHTML = '<div class="empty">No flights match the current filters.</div>';
         return;
     }
 
@@ -117,14 +183,15 @@ function renderResults(offers) {
         var out = o.outbound || {};
         var inbound = o.inbound || null;
         var segs = out.segments || [];
-        var hrs = Math.floor((out.total_duration_seconds || 0) / 3600);
+        var hours = Math.floor((out.total_duration_seconds || 0) / 3600);
         var mins = Math.floor(((out.total_duration_seconds || 0) % 3600) / 60);
+        if (!out.total_duration_seconds && segs.length) {
+            var dur = getDurationFromSegments(segs);
+            hours = Math.floor(dur / 3600);
+            mins = Math.floor((dur % 3600) / 60);
+        }
         var airlines = (o.airlines && o.airlines.length ? o.airlines.join(', ') : (o.owner_airline || 'Unknown'));
-        var stops = out.stopovers != null ? out.stopovers : '?';
-        var departureTime = segs.length ? fmtTime(segs[0].departure) : '';
-        var arrivalTime = segs.length ? fmtTime(segs[segs.length - 1].arrival) : '';
-        var departureDate = segs.length ? fmtDate(segs[0].departure) : '';
-        var arrivalDate = segs.length ? fmtDate(segs[segs.length - 1].arrival) : '';
+        var stops = out.stopovers != null ? out.stopovers : (segs.length > 1 ? segs.length - 1 : '?');
 
         var priceClass = 'offer-price';
         if (o.price < 100) priceClass += ' cheap';
@@ -134,13 +201,28 @@ function renderResults(offers) {
         var tierClass = o.source_tier === 'free' ? 'free' : 'paid';
         var tierLabel = o.source_tier === 'free' ? 'free' : '&#9733;';
 
+        var bookUrl = o.booking_url;
+        var bookHtml = '';
+        if (hasValidBookingUrl(o)) {
+            bookHtml = '<a href="' + bookUrl + '" target="_blank" rel="noopener" class="btn-buy">Book Now</a>';
+        } else {
+            var gfUrl = buildGoogleFlightsUrl(o);
+            if (gfUrl) {
+                bookHtml = '<a href="' + gfUrl + '" target="_blank" rel="noopener" class="btn-buy btn-buy-alt">Compare on Google Flights</a>';
+            } else if (bookUrl) {
+                bookHtml = '<a href="' + bookUrl + '" target="_blank" rel="noopener" class="btn-buy btn-buy-alt">Check price</a>';
+            }
+        }
+
+        if (filterDirect && i === 0) resultsDiv.innerHTML = '';
+
         html += '<div class="offer-card">' +
             '<div class="offer-top">' +
                 '<div class="' + priceClass + '">' +
                     (o.price_formatted || (o.currency + ' ' + o.price)) +
                 '</div>' +
                 '<div class="offer-actions">' +
-                    (o.booking_url ? '<a href="' + o.booking_url + '" target="_blank" rel="noopener" class="btn-buy">Book Now</a>' : '') +
+                    bookHtml +
                     (o.is_locked ? '<span class="badge badge-locked">Locked</span>' : '') +
                 '</div>' +
             '</div>' +
@@ -150,17 +232,18 @@ function renderResults(offers) {
             '</div>' +
 
             '<div class="offer-flight">' +
-                renderSegments(segs, hrs, mins, stops) +
+                renderSegments(segs, hours, mins, stops) +
             '</div>';
 
         if (inbound) {
             var inSegs = inbound.segments || [];
-            var inHrs = Math.floor((inbound.total_duration_seconds || 0) / 3600);
-            var inMins = Math.floor(((inbound.total_duration_seconds || 0) % 3600) / 60);
-            var inStops = inbound.stopovers != null ? inbound.stopovers : '?';
+            var inDur = inbound.total_duration_seconds || getDurationFromSegments(inSegs) || 0;
+            var inHours = Math.floor(inDur / 3600);
+            var inMins = Math.floor((inDur % 3600) / 60);
+            var inStops = inbound.stopovers != null ? inbound.stopovers : (inSegs.length > 1 ? inSegs.length - 1 : '?');
             html += '<div class="offer-flight return-flight">' +
                 '<div class="flight-label">Return</div>' +
-                renderSegments(inSegs, inHrs, inMins, inStops) +
+                renderSegments(inSegs, inHours, inMins, inStops) +
             '</div>';
         }
 
@@ -241,3 +324,86 @@ function cabinLabel(code) {
         default: return code;
     }
 }
+
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    var params = new URLSearchParams({
+        origin: getValue('origin').toUpperCase(),
+        destination: getValue('destination').toUpperCase(),
+        date: getValue('date'),
+        adults: getValue('adults'),
+        cabin_class: getValue('cabin_class'),
+        max_stops: getValue('max_stops'),
+        mode: getValue('mode'),
+    });
+
+    var returnDate = getValue('return_date');
+    if (returnDate) params.set('return_date', returnDate);
+
+    button.disabled = true;
+    button.innerHTML = '<span class="btn-spin"></span> Searching...';
+    statusDiv.innerHTML = '';
+    toolbar.classList.add('hidden');
+    resultsDiv.innerHTML = '';
+
+    var startTime = Date.now();
+
+    try {
+        var res = await fetch('/api/search?' + params);
+        var data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Search failed');
+        }
+
+        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        statusDiv.innerHTML =
+            '<span class="found">' + data.total_results + ' offers · ' +
+            data.search_params.origin + ' → ' + data.search_params.destination +
+            ' · ' + data.search_params.date +
+            (data.search_params.return_date ? ' – ' + data.search_params.return_date : '') +
+            '</span>' +
+            '<span class="elapsed">' + elapsed + 's</span>';
+
+        allOffers = data.offers;
+        currentSort = 'price';
+        filterDirect = false;
+        filterBaggage = false;
+        filterRefundable = false;
+
+        document.getElementById('sort-select').value = 'price';
+        document.getElementById('filter-direct').checked = false;
+        document.getElementById('filter-baggage').checked = false;
+        document.getElementById('filter-refundable').checked = false;
+
+        toolbar.classList.remove('hidden');
+        filterAndSort();
+    } catch (err) {
+        statusDiv.innerHTML = '<div class="error">' + err.message + '</div>';
+    } finally {
+        button.disabled = false;
+        button.innerHTML = 'Search';
+    }
+});
+
+document.getElementById('sort-select').addEventListener('change', function() {
+    currentSort = this.value;
+    filterAndSort();
+});
+
+document.getElementById('filter-direct').addEventListener('change', function() {
+    filterDirect = this.checked;
+    filterAndSort();
+});
+
+document.getElementById('filter-baggage').addEventListener('change', function() {
+    filterBaggage = this.checked;
+    filterAndSort();
+});
+
+document.getElementById('filter-refundable').addEventListener('change', function() {
+    filterRefundable = this.checked;
+    filterAndSort();
+});

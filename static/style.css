@@ -120,11 +120,109 @@ button:disabled {
 
 /* Status */
 .status {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     font-size: 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+/* Toolbar */
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    margin-bottom: 16px;
+}
+
+.toolbar.hidden {
+    display: none;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+}
+
+.filter-count {
+    font-size: 13px;
+    color: #8b949e;
+    font-weight: 600;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #8b949e;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 10px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    transition: all 0.15s;
+}
+
+.toggle:hover {
+    border-color: #58a6ff;
+    color: #c9d1d9;
+}
+
+.toggle input[type="checkbox"] {
+    width: auto;
+    height: auto;
+    margin: 0;
+    accent-color: #238636;
+    padding: 0;
+    border: none;
+    background: none;
+}
+
+.toggle:has(input:checked) {
+    background: #1a3329;
+    border-color: #238636;
+    color: #3fb950;
+}
+
+.sort-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sort-label {
+    font-size: 12px;
+    color: #8b949e;
+}
+
+#sort-select {
+    padding: 5px 8px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e1e4e8;
+    font-family: inherit;
+    cursor: pointer;
+    min-width: 100px;
+}
+
+#sort-select:focus {
+    border-color: #58a6ff;
 }
 
 .found {
@@ -216,6 +314,15 @@ button:disabled {
 
 .btn-buy:hover {
     background: #2ea043;
+}
+
+.btn-buy-alt {
+    background: #1f3953;
+    border: 1px solid #1f3953;
+}
+
+.btn-buy-alt:hover {
+    background: #264b6e;
 }
 
 /* Airline + source tier */

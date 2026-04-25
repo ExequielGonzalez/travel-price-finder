@@ -69,6 +69,36 @@
         </form>
 
         <div id="status" class="status"></div>
+
+        <div id="toolbar" class="toolbar hidden">
+            <div class="toolbar-left">
+                <span id="filter-count" class="filter-count"></span>
+            </div>
+            <div class="toolbar-right">
+                <label class="toggle" title="Only direct flights">
+                    <input type="checkbox" id="filter-direct">
+                    <span>Direct</span>
+                </label>
+                <label class="toggle" title="Only flights including checked baggage">
+                    <input type="checkbox" id="filter-baggage">
+                    <span>Baggage</span>
+                </label>
+                <label class="toggle" title="Only refundable fares">
+                    <input type="checkbox" id="filter-refundable">
+                    <span>Refundable</span>
+                </label>
+                <div class="sort-group">
+                    <span class="sort-label">Sort:</span>
+                    <select id="sort-select">
+                        <option value="price">Cheapest</option>
+                        <option value="duration">Fastest</option>
+                        <option value="departure_early">Earliest</option>
+                        <option value="departure_late">Latest</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
         <div id="results" class="results"></div>
     </div>
     <script src="/app.js"></script>
