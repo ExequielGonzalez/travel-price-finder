@@ -9,6 +9,7 @@ var currentSort = 'price';
 var filterDirect = false;
 var filterBaggage = false;
 var filterRefundable = false;
+var lastSearchResponse = null;
 
 function getValue(id) {
     return document.getElementById(id).value;
@@ -341,6 +342,8 @@ form.addEventListener('submit', async function(e) {
     var returnDate = getValue('return_date');
     if (returnDate) params.set('return_date', returnDate);
 
+    lastSearchParams = params;
+
     button.disabled = true;
     button.innerHTML = '<span class="btn-spin"></span> Searching...';
     statusDiv.innerHTML = '';
@@ -368,6 +371,7 @@ form.addEventListener('submit', async function(e) {
             '<span class="elapsed">' + elapsed + 's</span>';
 
         allOffers = data.offers;
+        lastSearchResponse = data;
         currentSort = 'price';
         filterDirect = false;
         filterBaggage = false;
@@ -407,3 +411,111 @@ document.getElementById('filter-refundable').addEventListener('change', function
     filterRefundable = this.checked;
     filterAndSort();
 });
+
+function _escapeCsv(val) {
+    if (val == null) return '';
+    var s = String(val);
+    if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0) {
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+}
+
+function _flattenOffer(offer) {
+    var out = offer.outbound || {};
+    var inbound = offer.inbound || {};
+    var outSegs = out.segments || [];
+    var inSegs = inbound.segments || [];
+    var conds = offer.conditions || {};
+
+    var bags = offer.bags_price || {};
+    var baggageIncluded = '';
+    for (var key in bags) {
+        var bag = bags[key];
+        if (bag && bag.included) {
+            baggageIncluded = bag.included;
+            break;
+        }
+    }
+
+    return {
+        id: offer.id || '',
+        price: offer.price != null ? offer.price : '',
+        currency: offer.currency || '',
+        price_formatted: offer.price_formatted || '',
+        airlines: (offer.airlines && offer.airlines.length ? offer.airlines.join(', ') : (offer.owner_airline || '')),
+        source: offer.source || '',
+        source_tier: offer.source_tier || '',
+        outbound_origin: outSegs.length ? outSegs[0].origin : '',
+        outbound_destination: outSegs.length ? outSegs[outSegs.length - 1].destination : '',
+        outbound_departure: outSegs.length ? outSegs[0].departure : '',
+        outbound_arrival: outSegs.length ? outSegs[outSegs.length - 1].arrival : '',
+        outbound_duration_seconds: out.total_duration_seconds != null ? out.total_duration_seconds : '',
+        outbound_stopovers: out.stopovers != null ? out.stopovers : '',
+        inbound_origin: inSegs.length ? inSegs[0].origin : '',
+        inbound_destination: inSegs.length ? inSegs[inSegs.length - 1].destination : '',
+        inbound_departure: inSegs.length ? inSegs[0].departure : '',
+        inbound_arrival: inSegs.length ? inSegs[inSegs.length - 1].arrival : '',
+        inbound_duration_seconds: inbound.total_duration_seconds != null ? inbound.total_duration_seconds : '',
+        inbound_stopovers: inbound.stopovers != null ? inbound.stopovers : '',
+        booking_url: offer.booking_url || '',
+        availability_seats: offer.availability_seats != null ? offer.availability_seats : '',
+        is_locked: offer.is_locked != null ? offer.is_locked : '',
+        refundable: conds.refund_before_departure || '',
+        changeable: conds.exchange_before_departure || '',
+        baggage_included: baggageIncluded,
+    };
+}
+
+function _generateCsv(offers) {
+    if (!offers || !offers.length) return '';
+    var headers = [
+        'id', 'price', 'currency', 'price_formatted', 'airlines', 'source', 'source_tier',
+        'outbound_origin', 'outbound_destination', 'outbound_departure', 'outbound_arrival',
+        'outbound_duration_seconds', 'outbound_stopovers',
+        'inbound_origin', 'inbound_destination', 'inbound_departure', 'inbound_arrival',
+        'inbound_duration_seconds', 'inbound_stopovers',
+        'booking_url', 'availability_seats', 'is_locked', 'refundable', 'changeable', 'baggage_included'
+    ];
+    var lines = [headers.join(',')];
+    for (var i = 0; i < offers.length; i++) {
+        var flat = _flattenOffer(offers[i]);
+        var row = [];
+        for (var h = 0; h < headers.length; h++) {
+            row.push(_escapeCsv(flat[headers[h]]));
+        }
+        lines.push(row.join(','));
+    }
+    return lines.join('\n');
+}
+
+function _downloadBlob(content, mimeType, filename) {
+    var blob = new Blob([content], { type: mimeType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function downloadJson() {
+    if (!lastSearchResponse) return;
+    var data = JSON.stringify(lastSearchResponse, null, 2);
+    var params = lastSearchResponse.search_params || {};
+    var filename = 'flights_' + (params.origin || '') + '_' + (params.destination || '') + '_' + (params.date || '') + '.json';
+    _downloadBlob(data, 'application/json', filename);
+}
+
+function downloadCsv() {
+    if (!allOffers || !allOffers.length) return;
+    var csv = _generateCsv(allOffers);
+    var params = lastSearchResponse && lastSearchResponse.search_params ? lastSearchResponse.search_params : {};
+    var filename = 'flights_' + (params.origin || '') + '_' + (params.destination || '') + '_' + (params.date || '') + '.csv';
+    _downloadBlob(csv, 'text/csv', filename);
+}
+
+document.getElementById('download-json').addEventListener('click', downloadJson);
+document.getElementById('download-csv').addEventListener('click', downloadCsv);
