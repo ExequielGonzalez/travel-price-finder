@@ -3,11 +3,24 @@ import logging
 from ..engine import FlightEngine
 from ..models.schemas import SearchResponse, LocationResult, HealthResponse
 from ..config import settings
+from ..locations import search_locations
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 engine = FlightEngine(api_key=settings.letsfg_api_key)
+
+_MAX_AIRPORTS = 5
+
+
+def _parse_airports(value: str) -> list[str]:
+    """Split comma-separated IATA codes, uppercase and deduplicate."""
+    codes = [c.strip().upper() for c in value.split(",") if c.strip()]
+    seen = []
+    for c in codes:
+        if c not in seen:
+            seen.append(c)
+    return seen
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -17,8 +30,8 @@ async def health():
 
 @router.get("/search", response_model=SearchResponse)
 async def search(
-    origin: str = Query(..., description="Origin IATA code or city name"),
-    destination: str = Query(..., description="Destination IATA code or city name"),
+    origin: str = Query(..., description="Origin IATA code(s), comma-separated"),
+    destination: str = Query(..., description="Destination IATA code(s), comma-separated"),
     date: str = Query(..., description="Departure date YYYY-MM-DD"),
     return_date: str | None = Query(None, description="Return date YYYY-MM-DD"),
     adults: int = Query(1, ge=1, le=9),
@@ -28,10 +41,24 @@ async def search(
     limit: int = Query(50, ge=1, le=100),
     mode: str = Query("full", pattern=r"^(full|fast)$"),
 ):
+    origins = _parse_airports(origin)
+    destinations = _parse_airports(destination)
+
+    if len(origins) > _MAX_AIRPORTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many origin airports: {len(origins)} (max {_MAX_AIRPORTS})",
+        )
+    if len(destinations) > _MAX_AIRPORTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many destination airports: {len(destinations)} (max {_MAX_AIRPORTS})",
+        )
+
     try:
-        result = await engine.search(
-            origin=origin,
-            destination=destination,
+        result = await engine.search_multi(
+            origins=origins,
+            destinations=destinations,
             date=date,
             return_date=return_date,
             adults=adults,
@@ -49,4 +76,14 @@ async def search(
 
 @router.get("/locations", response_model=list[LocationResult])
 async def resolve_location(q: str = Query(..., min_length=1)):
-    raise HTTPException(status_code=501, detail="Location resolution available when LETSFG_API_KEY is set")
+    results = search_locations(q)
+    return [
+        LocationResult(
+            iata_code=r["iata_code"],
+            name=r["name"],
+            type=r["type"],
+            city=r.get("city"),
+            country=r.get("country"),
+        )
+        for r in results
+    ]

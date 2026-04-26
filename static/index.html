@@ -15,13 +15,19 @@
 
         <form id="search-form">
             <div class="form-row">
-                <div class="field">
-                    <label for="origin">Origin</label>
-                    <input id="origin" placeholder="LON, JFK, BCN..." required>
+                <div class="field autocomplete-field">
+                    <label for="origin-input">Origin</label>
+                    <div class="chips-container" id="origin-chips"></div>
+                    <input id="origin-input" class="autocomplete-input" placeholder="Type country, city or IATA..." autocomplete="off">
+                    <input type="hidden" id="origin" required>
+                    <div class="autocomplete-dropdown hidden" id="origin-dropdown"></div>
                 </div>
-                <div class="field">
-                    <label for="destination">Destination</label>
-                    <input id="destination" placeholder="CDG, MIA, NRT..." required>
+                <div class="field autocomplete-field">
+                    <label for="destination-input">Destination</label>
+                    <div class="chips-container" id="destination-chips"></div>
+                    <input id="destination-input" class="autocomplete-input" placeholder="Type country, city or IATA..." autocomplete="off">
+                    <input type="hidden" id="destination" required>
+                    <div class="autocomplete-dropdown hidden" id="destination-dropdown"></div>
                 </div>
                 <div class="field">
                     <label for="date">Departure Date</label>

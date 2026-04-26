@@ -555,6 +555,114 @@ button:disabled {
     flex-wrap: wrap;
 }
 
+/* Autocomplete */
+.autocomplete-field {
+    position: relative;
+}
+
+.chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+    min-height: 0;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #1a3329;
+    color: #3fb950;
+    border: 1px solid #238636;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.chip-remove {
+    background: none;
+    border: none;
+    color: #3fb950;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    margin-left: 2px;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.chip-remove:hover {
+    opacity: 1;
+    color: #f85149;
+}
+
+.autocomplete-input {
+    width: 100%;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 100;
+    margin-top: -4px;
+    padding: 4px 0;
+}
+
+.autocomplete-dropdown.hidden {
+    display: none;
+}
+
+.autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.1s;
+    border-bottom: 1px solid #21262d;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background: #1f2a3a;
+}
+
+.autocomplete-item .item-main {
+    color: #e1e4e8;
+    font-weight: 500;
+}
+
+.autocomplete-item .item-sub {
+    color: #8b949e;
+    font-size: 11px;
+}
+
+.autocomplete-item .item-code {
+    background: #21262d;
+    color: #58a6ff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: monospace;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .form-row {

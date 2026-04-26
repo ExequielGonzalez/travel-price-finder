@@ -10,6 +10,160 @@ var filterDirect = false;
 var filterBaggage = false;
 var filterRefundable = false;
 var lastSearchResponse = null;
+var lastSearchParams = null;
+
+/* ---------- Autocomplete with chips ---------- */
+function setupAutocomplete(inputId, chipsId, hiddenId, dropdownId, maxChips) {
+    var input = document.getElementById(inputId);
+    var chipsContainer = document.getElementById(chipsId);
+    var hidden = document.getElementById(hiddenId);
+    var dropdown = document.getElementById(dropdownId);
+    var chips = [];
+    var items = [];
+    var activeIndex = -1;
+    var debounceTimer = null;
+
+    function updateHidden() {
+        hidden.value = chips.map(function(c) { return c.code; }).join(',');
+    }
+
+    function renderChips() {
+        chipsContainer.innerHTML = '';
+        for (var i = 0; i < chips.length; i++) {
+            var chip = document.createElement('span');
+            chip.className = 'chip';
+            chip.innerHTML = chips[i].code + ' <button type="button" class="chip-remove" data-idx="' + i + '">&times;</button>';
+            chipsContainer.appendChild(chip);
+        }
+        updateHidden();
+    }
+
+    chipsContainer.addEventListener('click', function(e) {
+        if (e.target.classList.contains('chip-remove')) {
+            var idx = parseInt(e.target.getAttribute('data-idx'), 10);
+            chips.splice(idx, 1);
+            renderChips();
+            input.focus();
+        }
+    });
+
+    function addChip(code, name) {
+        code = code.toUpperCase();
+        if (chips.some(function(c) { return c.code === code; })) return;
+        if (chips.length >= maxChips) {
+            alert('Maximum ' + maxChips + ' airports allowed.');
+            return;
+        }
+        chips.push({ code: code, name: name });
+        renderChips();
+        input.value = '';
+        dropdown.classList.add('hidden');
+        items = [];
+        activeIndex = -1;
+    }
+
+    function showDropdown(list) {
+        items = list;
+        activeIndex = -1;
+        if (!list || !list.length) {
+            dropdown.classList.add('hidden');
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+            html += '<div class="autocomplete-item" data-idx="' + i + '">' +
+                '<div>' +
+                    '<div class="item-main">' + escapeHtml(item.name) + '</div>' +
+                    '<div class="item-sub">' + escapeHtml(item.city || '') + (item.country ? ', ' + item.country : '') + '</div>' +
+                '</div>' +
+                '<span class="item-code">' + escapeHtml(item.iata_code) + '</span>' +
+            '</div>';
+        }
+        dropdown.innerHTML = html;
+        dropdown.classList.remove('hidden');
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function fetchSuggestions(q) {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+            if (!q || q.length < 2) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+            fetch('/api/locations?q=' + encodeURIComponent(q))
+                .then(function(res) { return res.json(); })
+                .then(function(data) { showDropdown(data); })
+                .catch(function() { dropdown.classList.add('hidden'); });
+        }, 200);
+    }
+
+    input.addEventListener('input', function() {
+        fetchSuggestions(input.value.trim());
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (!items.length) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = (activeIndex + 1) % items.length;
+            highlightActive();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = (activeIndex - 1 + items.length) % items.length;
+            highlightActive();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0 && activeIndex < items.length) {
+                var item = items[activeIndex];
+                addChip(item.iata_code, item.name);
+            } else if (items.length === 1) {
+                addChip(items[0].iata_code, items[0].name);
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden');
+            activeIndex = -1;
+        }
+    });
+
+    function highlightActive() {
+        var els = dropdown.querySelectorAll('.autocomplete-item');
+        for (var i = 0; i < els.length; i++) {
+            els[i].classList.toggle('active', i === activeIndex);
+        }
+        if (activeIndex >= 0 && els[activeIndex]) {
+            els[activeIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    dropdown.addEventListener('click', function(e) {
+        var itemEl = e.target.closest('.autocomplete-item');
+        if (!itemEl) return;
+        var idx = parseInt(itemEl.getAttribute('data-idx'), 10);
+        var item = items[idx];
+        if (item) addChip(item.iata_code, item.name);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target) && !chipsContainer.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    return {
+        getChips: function() { return chips.slice(); },
+        clear: function() { chips = []; renderChips(); }
+    };
+}
+
+var originAutocomplete = setupAutocomplete('origin-input', 'origin-chips', 'origin', 'origin-dropdown', 5);
+var destinationAutocomplete = setupAutocomplete('destination-input', 'destination-chips', 'destination', 'destination-dropdown', 5);
 
 function getValue(id) {
     return document.getElementById(id).value;
